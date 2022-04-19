@@ -12,11 +12,17 @@
  
 @ --------------------- Implementation --------------------
 .type init_leds, %function
-@ Sets the GPIO pins used for the led matrix to OUTPUT mode (call once)
+@ REQUIRED for other functions in this library to work (call once)
+@ Sets the GPIO pins used for the led matrix to OUTPUT mode 
 @ --parameters--
 @ none
 init_leds:
   push {r4, lr}
+  @ set the columns and rows default to off
+  mov r0, 0b11111
+  bl write_column_pins
+  mov r0, 0b00000
+  bl write_row_pins
   ldr r4, =0 @ r4 stores loop counter
 init_loop_start:
   cmp r4, #10 @ 10 total columns and rows to initialize
