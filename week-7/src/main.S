@@ -7,21 +7,41 @@ main:
   push {lr}
   bl init_leds
   pop {lr}
-  b loop
+  mov r1, 0
+  b stream_characters_loop
 .size main, .-main
 
-loop:
-  mov r0, 2
-  push {lr}
+stream_characters_loop:
+  ldr r0, =input_string
+  ldrb r0, [r0, r1]
+  cmp r0, 0
+  beq end
+  sub r0, r0, #65
+  
+  push {r1, lr}
+  cmp r0, 0
+  IT LT
+  bllt blink_space
+  pop {r1, lr}
+
+  push {r1, lr}
+  cmp r0, 25
+  IT GT
+  blgt blink_space
+  pop {r1, lr}
+
+  push {r1, lr}
   bl morse_table_index
-  pop {lr}
-  push {lr}
+  pop {r1, lr}
+
+  push {r1, lr}
   bl blink_codepoint
-  pop {lr}
-  push {lr}
-  bl blink_space
-  pop {lr}
-  b loop
+  pop {r1, lr}
+  add r1, #1
+  b stream_characters_loop
+
+end:
+  b end
 
 .type morse_table_index, %function
 morse_table_index:
@@ -202,7 +222,7 @@ cycle:
 
 .data
 input_string:
-.asciz "INPUT STRING"
+.asciz "JOHNKIM"
 
 @ to make sure our table starts on a word boundary
 .align 2
