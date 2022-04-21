@@ -11,7 +11,7 @@ main:
 .size main, .-main
 
 loop:
-  mov r0, 7
+  mov r0, 6
   push {lr}
   bl blink_codepoint
   pop {lr}
@@ -37,20 +37,16 @@ blink_code_point_loop_start:
   beq blink_code_point_loop_end
   add r4, #4
   ldr r6, [r0, r4]
-  cmp r6, #0
-  beq blink_code_point_if_dot
-  cmp r6, #1
-  beq blink_code_point_if_dash
-blink_code_point_if_dot:
-  push {lr}
-  bl blink_dot
-  pop {lr}
-  b blink_code_point_loop_start
-
-blink_code_point_if_dash:
-  push {lr}
-  bl blink_dash
-  pop {lr}
+  push {r0, lr}
+  cmp r6, 0
+  IT EQ
+  bleq blink_dot
+  pop {r0, lr}
+  push {r0, lr}
+  cmp r6, 1
+  IT EQ
+  bleq blink_dash
+  pop {r0, lr}
   b blink_code_point_loop_start
 
 blink_code_point_loop_end:
