@@ -17,18 +17,30 @@ stream_characters_loop:
   cmp r0, 0
   beq end
   sub r0, r0, #65
-  
+
   push {r1, lr}
   cmp r0, 0
   IT LT
   bllt blink_space
   pop {r1, lr}
+  cmp r0, 0
+  IT LT
+  addlt r1, #1
+  cmp r0, 0
+  IT LT
+  bllt stream_characters_loop
 
   push {r1, lr}
   cmp r0, 25
   IT GT
   blgt blink_space
   pop {r1, lr}
+  cmp r0, 25
+  IT GT
+  addgt r1, #1
+  cmp r0, 25
+  IT GT
+  blgt stream_characters_loop
 
   push {r1, lr}
   bl morse_table_index
@@ -222,7 +234,7 @@ cycle:
 
 .data
 input_string:
-.asciz "JOHNKIM"
+.asciz "JOHN KIM"
 
 @ to make sure our table starts on a word boundary
 .align 2
