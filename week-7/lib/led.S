@@ -1,229 +1,277 @@
 .syntax unified
-.global main
+@ Simple LED library
+@ NOTE: This module depends on utils.S and symbols.S
 
-.type main, %function
-main:
-  nop
-  push {lr}
-  bl init_leds
-  pop {lr}
-  b loop
-.size main, .-main
+@ --------------------- Module Interface --------------------
+@ declare all labels corresponding to functions designed to be called from elsewhere
+@ as global - this is the public API of the library
+@ Function exports:
+.global init_leds, write_row_pin, write_column_pin, write_led_pin, 
+.global write_led, write_pins, write_row_pins, write_column_pins, 
+.global read_led, read_pins, read_row, read_column,
+ 
+@ --------------------- Implementation --------------------
+.type init_leds, %function
+@ REQUIRED for other functions in this library to work (call once)
+@ Sets the GPIO pins used for the led matrix to OUTPUT mode 
+@ --parameters--
+@ none
+init_leds:
+  push {r4, lr}
+  @ set the columns and rows default to off
+  mov r0, 0b11111
+  bl write_column_pins
+  mov r0, 0b00000
+  bl write_row_pins
+  ldr r4, =0 @ r4 stores loop counter
+init_loop_start:
+  cmp r4, #10 @ 10 total columns and rows to initialize
+  beq init_loop_end
+  mov r0, r4 @ Index of pin in pins array
+  ldr r1, =OFS_GPIO_DIR
+  ldr r2, =1 @ Set direction to output
+  bl write_led_pin
+  add r4, #1
+  b init_loop_start
+init_loop_end:
+  pop {r4, lr}
+  bx lr
+.size init_leds, .-init_leds
 
-loop:
-  mov r0, 6
+.type write_row_pin, %function
+@ Controls the bit for a specified led GPIO row in the specified offset register
+@ --parameters--
+@ r0: row index (0-4 with 0 being the top row)
+@ r1: offset register (usually OUT or DIR)
+@ r2: led state (lsb)
+write_row_pin:
   push {lr}
-  bl blink_codepoint
+  bl write_led_pin
   pop {lr}
-  push {lr}
-  bl blink_space
-  pop {lr}
-  b loop
+  bx lr
+.size write_row_pin, .-write_row_pin
 
-.type blink_codepoint, %function
-blink_codepoint:
-  push {r4-r6}
-  mov r4, #24
-  mov r6, r0
-  mul r6, r6, r4
-  mov r4, #4
-  ldr r0, =morse_table
-  ldr r5, [r0, r6]
-  mul r5, r5, r4
-  add r5, r5, r6
-  mov r4, r6
-blink_code_point_loop_start:
-  cmp r4, r5
-  beq blink_code_point_loop_end
-  add r4, #4
-  ldr r6, [r0, r4]
-  push {r0, lr}
+.type write_column_pin, %function
+@ Controls the bit for a specified led GPIO column in the specified offset register
+@ --parameters--
+@ r0: column index (0-4 with 0 being the left most column)
+@ r1: offset register (usually OUT or DIR)
+@ r2: led state (lsb)
+write_column_pin:
+  push {lr}
+  add r0, 5 @ convert to column index for write pin function
+  bl write_led_pin
+  pop {lr}
+  bx lr
+.size write_column_pin, .-write_column_pin
+
+.type write_led_pin, %function
+@ Controls the bit for a specified led GPIO pin in the specified offset register
+@ --parameters--
+@ r0: pin index (0-4 is rows, 5-9 is cols)
+@ r1: offset register (usually OUT or DIR)
+@ r2: led state (lsb)
+write_led_pin:
+  push {r4, lr}
+  mov r4, r0
+  cmp r0, #8 @ Necessary because one of the led pins in in port 1, the rest are in port 0 (srsly, why?)
+  beq set_led_else_start
+set_led_if_start:
+  ldr r0, =ADR_P0
+  b set_led_if_end
+set_led_else_start:
+  ldr r0, =ADR_P1
+set_led_if_end:
+  mov r3, r2
+  ldr r2, =pin_data
+  ldr r2, [r2, r4, lsl #2] @ read data from pin array
+  bl write_bit
+  pop {r4, lr}
+  bx lr
+.size write_led_pin, .-write_led_pin
+
+.type write_led, %function
+@ Controls the column and row pins for a given led. Turns the column low and row high. 
+@ Makes no checks for any existing state with other leds and the side effects this could cause.
+@ --parameters--
+@ r0: row index (0-4 with 0 being the top row)
+@ r1: column index (0-4 with 0 being the left most column)
+@ r2: led state (lsb)
+write_led:
+  push {lr}
+  push {r0 - r2}
+  ldr r1, =OFS_GPIO_OUT
+  @ rows are used to control the leds, so this can just be called as is to turn the row OUT high or low
+  bl write_led_pin
+  pop {r0 - r2}
+  @ turn the corresponding column low regardless
+  mov r0, r1
+  add r0, 5
+  ldr r1, =OFS_GPIO_OUT
+  mov r2, 0
+  bl write_led_pin
+  pop {lr}
+  bx lr
+.size write_led, .-write_led
+
+.type write_pins, %function
+@ Controls the led column or row current outputs based on a given structure. 
+@ Makes no checks for any existing state with other leds and the side effects this could cause.
+@ led states example:
+@ r0 = ...01011 -> Index 0: low, Index 1: high, Index 2: low, Index 3: high, Index 4: high
+@ --parameters--
+@ r0: led states, least significant 5 bits where a 1 means pin high, 0 means pin low (bit<0> == row 0 (top), bit<4> == row 4 (bottom))
+@ r1: row or column control (0 == Row, 1 == Column)
+write_pins:
+  push {r4 - r6, lr}
+  mov r4, 5
+  mul r6, r4, r1
+  mov r5, r0
+write_pins_loop:
+  subs r4, 1
+  bmi write_pins_loop_end
+  lsr r2, r5, r4
+  and r2, 0b1
+  mov r0, r4
+  add r0, r6
+  ldr r1, =OFS_GPIO_OUT
+  bl write_led_pin
+  b write_pins_loop
+write_pins_loop_end:
+  pop {r4 - r6, lr}
+  bx lr
+.size write_pins, .-write_pins
+
+.type write_row_pins, %function
+@ Controls the led rows current output based on a given structure. 
+@ Makes no checks for any existing state with other leds and the side effects this could cause.
+@ led states example:
+@ r0 = ...01011 -> Row 0: low, Row 1: high, Row 2: low, Row 3: high, Row 4: high
+@ --parameters--
+@ r0: led states, least significant 5 bits where a 1 means pin high, 0 means pin low (bit<0> == row 0 (top), bit<4> == row 4 (bottom))
+write_row_pins:
+  push {lr}
+  mov r1, 0
+  bl write_pins
+  pop {lr}
+  bx lr
+.size write_row_pins, .-write_row_pins
+
+.type write_column_pins, %function
+@ Controls the led columns current output based on a given structure. 
+@ Makes no checks for any existing state with other leds and the side effects this could cause.
+@ led states example:
+@ r0 = ...01011 -> Column 0: low, Column 1: on, Column 2: low, Column 3: on, Column 4: on
+@ --parameters--
+@ r0: led states, least significant 5 bits where a 1 means led on, 0 means led off (bit<0> == row 0 (top), bit<4> == row 4 (bottom))
+write_column_pins:
+  push {lr}
+  mov r1, 1
+  bl write_pins
+  pop {lr}
+  bx lr
+.size write_column_pins, .-write_column_pins
+
+.type read_led, %function
+@ Reads the led current output state based on a given row and column index. 
+@ --parameters--
+@ r0: row index (0-4 with 0 being the top row)
+@ r1: column index (0-4 with 0 being the left most column)
+@ --return--
+@ r0: bit<0> contains led state (1 == On, 0 == Off)
+@ flags set
+read_led:
+  push {r4, r5, lr}
+  mov r4, r0
+  mov r5, r1
+  bl read_row
+  lsr r0, r4
+  and r4, r0, 0b1
+  bl read_column
+  lsr r0, r5
+  and r5, r0, 0b1
+  @ To make a circuit, the row has to be high and the column low (and not)
+  bics r0, r4, r5
+  pop {r4, r5, lr}
+  bx lr
+.size read_led, .-read_led
+
+.type read_pins, %function
+@ Reads the row or column pins current output state. 
+@ --parameters--
+@ r0: read row or column (0 == Row, 1 == Column)
+@ --return--
+@ r0: bit<0-4> contains output state, bit index == row / column index (1 == High, 0 == Low)
+read_pins:
+  push {r4 - r6, lr}
+  mov r6, 20
+  mul r6, r0
+  mov r4, 0
+  mov r5, 5
+read_pins_loop:
+  subs r5, 1
+  bmi read_pins_loop_end
+  lsl r4, 1
+  @ column 3 is on port 2
   cmp r6, 0
-  IT EQ
-  bleq blink_dot
-  pop {r0, lr}
-  push {r0, lr}
-  cmp r6, 1
-  IT EQ
-  bleq blink_dash
-  pop {r0, lr}
-  b blink_code_point_loop_start
-
-blink_code_point_loop_end:
-  pop {r4-r6}
+  beq read_pins_if_start
+  @ if we're here, then we are reading columns
+  cmp r5, 3
+  beq read_pins_else_start
+read_pins_if_start:
+  ldr r0, =ADR_P0
+  b read_pins_if_end
+read_pins_else_start:
+  ldr r0, =ADR_P1
+read_pins_if_end:
+  ldr r1, =OFS_GPIO_OUT
+  ldr r2, =pin_data
+  mov r3, 4
+  mul r3, r5
+  add r3, r6
+  ldr r2, [r2, r3]
+  bl read_bit
+  orr r4, r0
+  b read_pins_loop
+read_pins_loop_end:
+  mov r0, r4
+  pop {r4 - r6, lr}
   bx lr
-.size blink_codepoint, .-blink_codepoint
+.size read_pins, .-read_pins
 
-.type blink_dot, %function
-@ Blinks leds for one dot length and pause one dot length
+.type read_row, %function
+@ Reads the row pins current output state. 
 @ --parameters--
 @ none
 @ --return--
-@ none
-blink_dot:
-  nop
+@ r0: bit<0-4> contains row output state, bit index == row index (1 == High, 0 == Low)
+read_row:
   push {lr}
-  bl leds_on
+  mov r0, 0
+  bl read_pins
   pop {lr}
-  
-  push {lr}
-  bl pause_dot
-  pop {lr}
-
-  push {lr}
-  bl leds_off
-  pop {lr}
-    
-  push {lr}
-  bl pause_dot
-  pop {lr}
-
   bx lr
-.size blink_dot, .-blink_dot
+.size read_row, .-read_row
 
-.type blink_dash, %function
-@ Blinks leds for three dot lengths and pause one dot length
+.type read_column, %function
+@ Reads the column pins current output state. 
 @ --parameters--
 @ none
 @ --return--
-@ none
-blink_dash:
+@ r0: bit<0-4> contains column output state, bit index == column index (1 == High, 0 == Low)
+read_column:
   push {lr}
-  bl leds_on
-  pop {lr}
-
-  push {r4, r5}
-  mov r5, #3
-  mov r4, 0
-blink_dash_loop_start:
-  cmp r4, r5
-  beq blink_dash_loop_end
-
-  push {lr}
-  bl pause_dot
-  pop {lr}
-
-  add r4, #1
-  b blink_dash_loop_start
-blink_dash_loop_end:
-  pop {r4, r5}
-
-  push {lr}
-  bl leds_off
-  pop {lr}
-
-  push {lr}
-  bl pause_dot
-  pop {lr}
-
-  bx lr
-.size blink_dash, .-blink_dash
-
-.type blink_space, %function
-@ Doesn't blinks leds for seven dash length
-@ --parameters--
-@ none
-@ --return--
-@ none
-blink_space:
-  push {r4, r5}
-  mov r5, #7
-  mov r4, 0
-blink_space_loop_start:
-  cmp r4, r5
-  beq blink_space_loop_end
-  push {lr}
-  bl pause_dot
-  pop {lr}
-  add r4, #1
-  b blink_space_loop_start
-blink_space_loop_end:
-  pop {r4, r5}
-  bx lr
-.size blink_dash, .-blink_dash
-
-.type leds_on, %function
-leds_on:
-  ldr r0, =0b01010
-  push {lr}
-  bl write_row_pins
-  pop {lr}
-  ldr r0, =0b10101
-  push {lr}
-  bl write_column_pins
+  mov r0, 1
+  bl read_pins
   pop {lr}
   bx lr
-.size leds_on, .-leds_on
-
-.type leds_off, %function
-leds_off:
-  ldr r0, =0b00000
-  push {lr}
-  bl write_row_pins
-  pop {lr}
-  ldr r0, =0b11111
-  push {lr}
-  bl write_column_pins
-  pop {lr}
-  bx lr
-.size leds_off, .-leds_off
-
-.type pause_dot, %function
-pause_dot:
-  push {r4, r5}
-  ldr r5, =cycle
-  ldr r5, [r5]
-  ldr r4, =0
-pause_dot_loop_start:
-  cmp r4, r5
-  beq pause_dot_loop_end
-  add r4, #1
-  b pause_dot_loop_start
-pause_dot_loop_end:
-  pop {r4, r5}
-  bx lr
-.size pause_dot, .-pause_dot
+.size read_column, .-read_column
 
 .data
-cycle:
-.word 0x400000
-
-.data
-input_string:
-.asciz "INPUT STRING"
-
-@ to make sure our table starts on a word boundary
-.align 2
-
-@ Each entry in the table is 6 words long
-@ - The first word is the number of dots and dashes for this entry
-@ - The next 5 words are 0 for a dot, 1 for a dash, or padding (value doesn't matter)
-@
-@ E.g., 'G' is dash-dash-dot. There are 2 extra words to pad the entry size to 6 words
-morse_table:
-  .word 2, 0, 1, 0, 0, 0 @ A
-  .word 4, 1, 0, 0, 0, 0 @ B
-  .word 4, 1, 0, 1, 0, 0 @ C
-  .word 3, 1, 0, 0, 0, 0 @ D
-  .word 1, 0, 0, 0, 0, 0 @ E
-  .word 4, 0, 0, 1, 0, 0 @ F
-  .word 3, 1, 1, 0, 0, 0 @ G
-  .word 4, 0, 0, 0, 0, 0 @ H
-  .word 2, 0, 0, 0, 0, 0 @ I
-  .word 4, 0, 1, 1, 1, 0 @ J
-  .word 3, 1, 0, 1, 0, 0 @ K
-  .word 4, 0, 1, 0, 0, 0 @ L
-  .word 2, 1, 1, 0, 0, 0 @ M
-  .word 2, 1, 0, 0, 0, 0 @ N
-  .word 3, 1, 1, 1, 0, 0 @ O
-  .word 4, 0, 1, 1, 0, 0 @ P
-  .word 4, 1, 1, 0, 1, 0 @ Q
-  .word 3, 0, 1, 0, 0, 0 @ R
-  .word 3, 0, 0, 0, 0, 0 @ S
-  .word 1, 1, 0, 0, 0, 0 @ T
-  .word 3, 0, 0, 1, 0, 0 @ U
-  .word 4, 0, 0, 0, 1, 0 @ V
-  .word 3, 0, 1, 1, 0, 0 @ W
-  .word 4, 1, 0, 0, 1, 0 @ X
-  .word 4, 1, 0, 1, 1, 0 @ Y
-  .word 4, 1, 1, 0, 0, 0 @ Z
+pin_data:
+@ row_pins:
+@     0   1   2   3   4
+.word 21, 22, 15, 24, 19
+@ col_pins:
+@     0   1   2   3   4
+.word 28, 11, 31, 05, 30

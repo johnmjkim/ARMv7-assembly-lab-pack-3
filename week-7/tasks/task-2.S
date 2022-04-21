@@ -11,46 +11,40 @@ main:
 .size main, .-main
 
 loop:
-  mov r0, 6
+  ldr r0, =morse_table
+  add r0, r0, 48
   push {lr}
   bl blink_codepoint
   pop {lr}
-  push {lr}
-  bl blink_space
-  pop {lr}
   b loop
+
+@ .type morse_table_index, %function
+@ morse_table_index:
+
+@ .size morse_table_index, .-morse_table_index
 
 .type blink_codepoint, %function
 blink_codepoint:
   push {r4-r6}
-  mov r4, #24
-  mov r6, r0
-  mul r6, r6, r4
   mov r4, #4
-  ldr r0, =morse_table
-  ldr r5, [r0, r6]
+  ldr r5, [r0]
   mul r5, r5, r4
-  add r5, r5, r6
-  mov r4, r6
+  mov r4, 0
 blink_code_point_loop_start:
   cmp r4, r5
   beq blink_code_point_loop_end
   add r4, #4
   ldr r6, [r0, r4]
-  cmp r6, #0
-  beq blink_code_point_if_dot
-  cmp r6, #1
-  beq blink_code_point_if_dash
-blink_code_point_if_dot:
-  push {lr}
-  bl blink_dot
-  pop {lr}
-  b blink_code_point_loop_start
-
-blink_code_point_if_dash:
-  push {lr}
-  bl blink_dash
-  pop {lr}
+  push {r0, lr}
+  cmp r6, 0
+  IT EQ
+  bleq blink_dot
+  pop {r0, lr}
+  push {r0, lr}
+  cmp r6, 1
+  IT EQ
+  bleq blink_dash
+  pop {r0, lr}
   b blink_code_point_loop_start
 
 blink_code_point_loop_end:
