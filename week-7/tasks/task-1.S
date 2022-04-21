@@ -9,15 +9,12 @@ main:
 .size main, .-main
 
 loop:
-  push {lr}
   bl blink_dot
-  pop {lr}
-  push {lr}
+  bl blink_dot
+  bl blink_dot
   bl blink_dash
-  pop {lr}
-  push {lr}
-  bl blink_space
-  pop {lr}
+  bl blink_dash
+  bl blink_dash
   b loop
 
 .type blink_dot, %function
