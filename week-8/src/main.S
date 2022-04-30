@@ -20,13 +20,13 @@ main:
   ldr r1, =(1 | 14 << 8 | 0 << 13 | 1 << 16)
   str r1, [r0]
 
-@ 2: Enable Interrupt for GPIOTE[0] (id = 6)
+  @ 2: Enable Interrupt for GPIOTE[0] (id = 6)
   @ S6.9.4.6 in nRF52833 reference manual
   ldr r0, =GPIOTE_INTENSET
   ldr r1, =0b1
   str r1, [r0]
 
-@ 3: enable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ISER0
+  @ 3: enable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ISER0
   @ NVIC_ISER0: B3.4.4 in ARMv7-M Reference Manual
   ldr r0, =NVIC_ISER0
   ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
@@ -42,7 +42,9 @@ loop:
 .type GPIOTE_IRQHandler, %function
 GPIOTE_IRQHandler:
   @ setup a breakpoint here to check when the interrupt occurs.
-  @ interrupt code goes here
+  push {lr}
+  bl leds_toggle
+  pop {lr}
   @ clear event
   ldr r0, =GPIOTE_EVENTS_IN0
   ldr r1, =0
@@ -50,3 +52,26 @@ GPIOTE_IRQHandler:
   nop
   bx lr
 .size GPIOTE_IRQHandler, .-GPIOTE_IRQHandler
+
+.type leds_toggle, %function
+leds_toggle:
+  push {lr}
+  bl read_row
+  pop {lr}
+
+  eor r0, r0, 0b01010
+  push {lr}
+  bl write_row_pins
+  pop {lr}
+
+  push {lr}
+  bl read_column
+  pop {lr}
+
+  eor r0, r0, 0b01010
+  push {lr}
+  bl write_column_pins
+  pop {lr}
+
+  bx lr
+.size leds_toggle, .-leds_toggle
