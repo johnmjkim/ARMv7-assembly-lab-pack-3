@@ -95,15 +95,20 @@ GPIOTE_IRQHandler:
 @ none
 SysTick_Handler:
   nop
-  @ enable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ISER0
-  @ NVIC_ISER0: B3.4.4 in ARMv7-M Reference Manual
-  ldr r0, =NVIC_ISER0
-  ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
-  str r1, [r0]
-
   @ clear GPIOTE and NVIC pending interrupt
   @ NVIC_ICPR0: B3.4.7 in ARMv7-M Reference Manual
   ldr r0, =NVIC_ICPR0
+  ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
+  str r1, [r0]
+
+  @ clear event for button A
+  ldr r0, =GPIOTE_EVENTS_IN0
+  ldr r1, =0
+  str r1, [r0]
+
+  @ enable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ISER0
+  @ NVIC_ISER0: B3.4.4 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_ISER0
   ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
   str r1, [r0]
 
