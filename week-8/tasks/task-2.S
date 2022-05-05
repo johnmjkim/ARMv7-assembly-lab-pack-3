@@ -17,10 +17,12 @@ main:
   @ we should toggle the LED for 1 HZ
   @ two toggles must be done in 64M cycles
   @ one toggle must be done in 32M cycles
-  @ count down from ONE_TOGGLE (32M =0x1E84800) cycles
+  @ count down from ONETENTH_TOGGLE (3.2M =0x30D400) cycles repeating 10 times
   ldr r0, =SYST_RVR
-  ldr r1, =ONE_TOGGLE
+  ldr r1, =ONETENTH_TOGGLE
   str r1, [r0]
+
+  mov r2, 10
 
   b loop
 .size main, .-main
@@ -32,12 +34,16 @@ loop:
   ldr r1, [r0]
 
   ldr r0, =SYST_CSR
-  ldr r2, [r0]
+  ldr r3, [r0]
 
   @ compare SYST_CSR COUNTFLAG is 1 or 0
-  lsr r2, r2, 16
+  lsr r3, r3, 16
+  cmp r3, 1
+  IT EQ
+  subeq r2, r2, 1
+
   push {lr}
-  cmp r2, 1
+  cmp r2, 0
   IT EQ
   bleq SysTick_Handler
   pop {lr} 
@@ -85,6 +91,7 @@ leds_toggle:
 
 .data
 .set ONE_TOGGLE, 0x1E84800 @ 32M cycles
+.set ONETENTH_TOGGLE, 0x30D400 @ 3.2M cycles
 
 @ SysTick register
 .set SYST_CSR, 0xE000E010
