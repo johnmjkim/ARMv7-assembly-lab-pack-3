@@ -47,6 +47,11 @@ loop:
   IT EQ
   bleq SysTick_Handler
   pop {lr} 
+
+  cmp r2, 0
+  IT EQ
+  moveq r2, 10
+
   b loop
 
 .global SysTick_Handler
@@ -59,9 +64,9 @@ loop:
 SysTick_Handler:
   nop
 
-  push {lr}
+  push {r1-r2, lr}
   bl leds_toggle
-  pop {lr}
+  pop {r1-r2, lr}
 
   bx lr
 .size SysTick_Handler, .-SysTick_Handler
