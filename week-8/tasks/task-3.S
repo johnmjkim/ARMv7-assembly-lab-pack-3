@@ -58,10 +58,30 @@ GPIOTE_IRQHandler:
   ldr r0, =GPIOTE_EVENTS_IN0
   ldr r1, =0
   str r1, [r0]
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
   @ clear event for button B
   ldr r0, =GPIOTE_EVENTS_IN1
   ldr r1, =0
   str r1, [r0]
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
+  nop
   nop
   bx lr
 .size GPIOTE_IRQHandler, .-GPIOTE_IRQHandler
