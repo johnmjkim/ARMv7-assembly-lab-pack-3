@@ -1,16 +1,5 @@
 .syntax unified
 .global main
-@ GPIOTE Constants
-.set GPIOTE_EVENTS_IN0, 0x40006100
-.set GPIOTE_EVENTS_IN1, 0x40006104
-.set GPIOTE_INTENSET, 0x40006304
-.set GPIOTE_CONFIG0, 0x40006510
-.set GPIOTE_CONFIG1, 0x40006514
-
-@ NVIC Constants
-.set NVIC_ISER0, 0xE000E100
-.set NVIC_ICER0, 0xE000E180
-.set NVIC_ICPR0, 0xE000E280
 
 .type main, %function
 main:
@@ -23,6 +12,12 @@ main:
   push {lr} 
   bl setupGPIOTE
   pop {lr}
+
+  @ 3: disable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ICER0
+  @ NVIC_ICER0: B3.4.5 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_ICER0
+  ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
+  str r1, [r0]
 
   push {lr} 
   bl setupSYSTICK
@@ -63,27 +58,24 @@ loop:
 .global GPIOTE_IRQHandler
 .type GPIOTE_IRQHandler, %function
 GPIOTE_IRQHandler:
-
+  @ led blinks at center when successfully clicked
   push {lr}
   bl led_center_blink
   pop {lr}
 
-  @ setup a breakpoint here to check when the interrupt occurs.
-  @ reduce blink delay by half
-  lsr r4, r4, 1
-
-  @ @ reduce blink delay by -20%
-  @ mov r5, 8
-  @ mul r4, r4, r5
-  @ mov r5, 10
-  @ udiv r4, r4, r5
+  @ reduce blink delay by -20%
+  mov r5, 8
+  mul r4, r4, r5
+  mov r5, 10
+  udiv r4, r4, r5
 
   @ clear event for button A
   ldr r0, =GPIOTE_EVENTS_IN0
   ldr r1, =0
   str r1, [r0]
-  nop
+
   bx lr
+  nop
 .size GPIOTE_IRQHandler, .-GPIOTE_IRQHandler
 
 .global SysTick_Handler
@@ -95,15 +87,21 @@ GPIOTE_IRQHandler:
 @ none
 SysTick_Handler:
   nop
-  @ enable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ISER0
-  @ NVIC_ISER0: B3.4.4 in ARMv7-M Reference Manual
-  ldr r0, =NVIC_ISER0
+
+  @ clear GPIOTE and NVIC pending interrupt
+  @ clear event for button A
+  ldr r0, =GPIOTE_EVENTS_IN0
+  ldr r1, =0
+  str r1, [r0]
+
+  @ NVIC_ICPR0: B3.4.7 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_ICPR0
   ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
   str r1, [r0]
 
-  @ clear GPIOTE and NVIC pending interrupt
-  @ NVIC_ICPR0: B3.4.7 in ARMv7-M Reference Manual
-  ldr r0, =NVIC_ICPR0
+  @ enable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ISER0
+  @ NVIC_ISER0: B3.4.4 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_ISER0
   ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
   str r1, [r0]
 
@@ -125,7 +123,6 @@ SysTick_Handler:
 
 .type leds_blink, %function
 leds_blink:
-
   push {r0, lr}
   bl leds_toggle
   pop {r0, lr}
@@ -229,6 +226,12 @@ setupGPIOTE:
   ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
   str r1, [r0]
 
+  @ 4: set priority of GPIOTE
+  @ NVIC_IPR1: B3.4.9 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_IPR1
+  ldr r1, =(1 << 21) @ set the 21-23th bit priority 1 (higher priority)
+  str r1, [r0]
+
   bx lr
 .size setupGPIOTE, .-setupGPIOTE
 
@@ -245,6 +248,13 @@ setupSYSTICK:
   ldr r0, =SYST_RVR
   ldr r1, =FIFTY_MILLISECONDS
   str r1, [r0]
+
+  @ set priority of SYSTICK
+  @ SHPR3: B3.2.12 in ARMv7-M Reference Manual
+  ldr r0, =SHPR3
+  ldr r1, =(1 << 30) @ set the 29-31th bit priority 2 (lower priority)
+  str r1, [r0]
+
   @ cycles repeating 100 times
   mov r2, 100
 
@@ -262,3 +272,17 @@ setupSYSTICK:
 .set SYST_RVR, 0xE000E014
 .set SYST_CVR, 0xE000E018
 .set SYST_CALIB, 0xE000E01C
+.set SHPR3, 0xE000ED20
+
+@ GPIOTE Constants
+.set GPIOTE_EVENTS_IN0, 0x40006100
+.set GPIOTE_EVENTS_IN1, 0x40006104
+.set GPIOTE_INTENSET, 0x40006304
+.set GPIOTE_CONFIG0, 0x40006510
+.set GPIOTE_CONFIG1, 0x40006514
+
+@ NVIC Constants
+.set NVIC_ISER0, 0xE000E100
+.set NVIC_ICER0, 0xE000E180
+.set NVIC_ICPR0, 0xE000E280
+.set NVIC_IPR1, 0xE000E404
