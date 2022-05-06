@@ -26,6 +26,10 @@ main:
   @ initial blink time
   ldr r4, =ONE_SECOND
 
+  @ initial player A, B score
+  mov r6, 5
+  mov r7, 5
+
   b loop
 .size main, .-main
 
@@ -53,17 +57,33 @@ loop:
   IT EQ
   moveq r2, 100
 
-  mov r0, 2
-  mov r1, 0
   push {lr}
-  bl led_blink
+  bl display_A_score
   pop {lr}
 
+  push {lr}
+  bl display_B_score
+  pop {lr}
+
+  cmp r6, 0
+  beq end
+
+  cmp r7, 0
+  beq end
+
   b loop
+
+end:
+  nop
+  b end
 
 .global GPIOTE_IRQHandler
 .type GPIOTE_IRQHandler, %function
 GPIOTE_IRQHandler:
+  nop
+  add r6, 1
+  sub r7, 1
+
   @ reduce blink delay by -20%
   mov r5, 8
   mul r4, r4, r5
@@ -74,9 +94,8 @@ GPIOTE_IRQHandler:
   ldr r0, =GPIOTE_EVENTS_IN0
   ldr r1, =0
   str r1, [r0]
-
-  bx lr
   nop
+  bx lr
 .size GPIOTE_IRQHandler, .-GPIOTE_IRQHandler
 
 .global SysTick_Handler
@@ -88,7 +107,6 @@ GPIOTE_IRQHandler:
 @ none
 SysTick_Handler:
   nop
-
   @ clear GPIOTE and NVIC pending interrupt
   @ clear event for button A
   ldr r0, =GPIOTE_EVENTS_IN0
@@ -142,6 +160,64 @@ led_center_blink:
   bx lr
 .size led_center_blink, .-led_center_blink
 
+.type display_A_score, %function
+@ --parameters--
+@ r6: score of player A
+display_A_score:
+  push {r0-r3}
+  ldr r2, =A_board
+  mov r3, 0
+display_A_score_loop:
+  cmp r3, r6
+  beq display_A_score_end
+
+  ldr r0, [r2, r3, lsl 2]
+  add r3, #10
+  ldr r1, [r2, r3, lsl 2]
+  sub r3, #10
+
+  push {r2, r3, lr}
+  bl led_blink
+  pop {r2, r3, lr}
+
+  add r3, r3, 1
+
+  b display_A_score_loop
+
+display_A_score_end:
+  pop {r0-r3}
+  bx lr
+.size display_A_score, .-display_A_score
+
+.type display_B_score, %function
+@ --parameters--
+@ r7: score of player B
+display_B_score:
+  push {r0-r3}
+  ldr r2, =B_board
+  mov r3, 0
+display_B_score_loop:
+  cmp r3, r7
+  beq display_B_score_end
+
+  ldr r0, [r2, r3, lsl 2]
+  add r3, #10
+  ldr r1, [r2, r3, lsl 2]
+  sub r3, #10
+
+  push {r2, r3, lr}
+  bl led_blink
+  pop {r2, r3, lr}
+
+  add r3, r3, 1
+
+  b display_B_score_loop
+
+display_B_score_end:
+  pop {r0-r3}
+  bx lr
+.size display_B_score, .-display_B_score
+
 .type led_blink, %function
 @ --parameters--
 @ r0: row index (0-4 with 0 being the top row)
@@ -152,6 +228,12 @@ led_blink:
   push {lr}
   bl led_on
   pop {lr}
+
+  @ @ for debugging
+  @ push {r0, lr}
+  @ ldr r0, =FIFTY_MILLISECONDS
+  @ bl delay
+  @ pop {r0, lr}
 
   push {lr}
   bl led_off
@@ -265,6 +347,15 @@ setupSYSTICK:
 
   bx lr
 .size setupSYSTICK, .-setupSYSTICK
+
+.data
+A_board:
+.word 0, 1, 2, 3, 4, 0, 1, 2, 3, 4
+.word 0, 0, 0, 0, 0, 1, 1, 1, 1, 1
+
+B_board:
+.word 4, 3, 2, 1, 0, 4, 3, 2, 1, 0
+.word 4, 4, 4, 4, 4, 3, 3, 3, 3, 3
 
 .data
 .set ONE_MILLISECONDS, 0x9C400 @ 0.64M cycles
