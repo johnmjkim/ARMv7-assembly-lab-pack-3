@@ -30,7 +30,6 @@ main:
 .size main, .-main
 
 loop:
-
   @ get SYST_CSR COUNTFLAG - bit 16
   ldr r0, =SYST_CVR
   ldr r1, [r0]
@@ -53,16 +52,18 @@ loop:
   cmp r2, 0
   IT EQ
   moveq r2, 100
+
+  mov r0, 2
+  mov r1, 0
+  push {lr}
+  bl led_blink
+  pop {lr}
+
   b loop
 
 .global GPIOTE_IRQHandler
 .type GPIOTE_IRQHandler, %function
 GPIOTE_IRQHandler:
-  @ led blinks at center when successfully clicked
-  push {lr}
-  bl led_center_blink
-  pop {lr}
-
   @ reduce blink delay by -20%
   mov r5, 8
   mul r4, r4, r5
@@ -108,8 +109,9 @@ SysTick_Handler:
   @ delay leds blink
   mov r0, r4
 
+  @ led blinks at center
   push {r1-r2, lr}
-  bl leds_blink
+  bl led_center_blink
   pop {r1-r2, lr}
 
   @ 3: disable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ICER0
@@ -121,88 +123,91 @@ SysTick_Handler:
   bx lr
 .size SysTick_Handler, .-SysTick_Handler
 
-.type leds_blink, %function
-leds_blink:
-  push {r0, lr}
-  bl leds_toggle
-  pop {r0, lr}
-
-  push {lr}
-  bl delay
-  pop {lr}
-
-  push {r0, lr}
-  bl leds_toggle
-  pop {r0, lr}
-
-  bx lr
-.size leds_blink, .-leds_blink
-
-.type leds_toggle, %function
-leds_toggle:
-  push {lr}
-  bl read_row
-  pop {lr}
-
-  eor r0, r0, 0b01010
-  push {lr}
-  bl write_row_pins
-  pop {lr}
-
-  push {lr}
-  bl read_column
-  pop {lr}
-
-  eor r0, r0, 0b01010
-  push {lr}
-  bl write_column_pins
-  pop {lr}
-
-  bx lr
-.size leds_toggle, .-leds_toggle
-
 .type led_center_blink, %function
 led_center_blink:
-
   push {r0, lr}
-  bl led_center_toggle
+  mov r0, 2
+  mov r1, 2
+  bl led_on
   pop {r0, lr}
-
-  ldr r0, =FIFTY_MILLISECONDS
 
   push {lr}
   bl delay
   pop {lr}
 
   push {r0, lr}
-  bl led_center_toggle
+  bl led_off
   pop {r0, lr}
 
   bx lr
 .size led_center_blink, .-led_center_blink
 
-.type led_center_toggle, %function
-led_center_toggle:
+.type led_blink, %function
+@ --parameters--
+@ r0: row index (0-4 with 0 being the top row)
+@ r1: column index (0-4 with 0 being the left most column)
+@ --return--
+@ none
+led_blink:
   push {lr}
-  bl read_row
+  bl led_on
   pop {lr}
 
-  eor r0, r0, 0b00100
   push {lr}
+  bl led_off
+  pop {lr}
+
+  bx lr
+.size led_blink, .-led_blink
+
+.type led_on, %function
+@ --parameters--
+@ r0: row index (0-4 with 0 being the top row)
+@ r1: column index (0-4 with 0 being the left most column)
+@ --return--
+@ none
+led_on:
+  push {r2}
+  ldr r2, =0b1
+  lsl r0, r2, r0
+  push {r1, lr}
   bl write_row_pins
-  pop {lr}
+  pop {r1, lr}
 
-  push {lr}
-  bl read_column
-  pop {lr}
-
-  eor r0, r0, 0b00100
+  ldr r2, =0b1
+  lsl r1, r2, r1
+  ldr r0, =0b11111
+  eor r0, r0, r1
   push {lr}
   bl write_column_pins
   pop {lr}
 
+  pop {r2}
+
   bx lr
-.size led_center_toggle, .-led_center_toggle
+.size led_on, .-led_on
+
+.type led_off, %function
+@ Interrupts and toggle led
+@ --parameters--
+@ none
+@ --return--
+@ none
+led_off:
+  push {r2}
+  ldr r0, =0b00000
+  push {lr}
+  bl write_row_pins
+  pop {lr}
+
+  ldr r0, =0b11111
+  push {lr}
+  bl write_column_pins
+  pop {lr}
+  pop {r2}
+
+  bx lr
+.size led_off, .-led_off
 
 .type setupGPIOTE, %function
 setupGPIOTE:
