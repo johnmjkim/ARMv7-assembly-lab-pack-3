@@ -80,9 +80,24 @@ end:
 .global GPIOTE_IRQHandler
 .type GPIOTE_IRQHandler, %function
 GPIOTE_IRQHandler:
-  nop
-  add r6, 1
-  sub r7, 1
+  push {r2, r3}
+  @ check which button clicked first
+  ldr r0, =GPIOTE_EVENTS_IN0
+  ldr r2, [r0]
+  push {lr}
+  cmp r2, #1
+  IT EQ
+  bleq firstA
+  pop {lr}
+
+  ldr r0, =GPIOTE_EVENTS_IN1
+  ldr r3, [r0]
+  push {lr}
+  cmp r3, #1
+  IT EQ
+  bleq firstB
+  pop {lr}
+  pop {r2, r3}
 
   @ reduce blink delay by -20%
   mov r5, 8
@@ -90,24 +105,12 @@ GPIOTE_IRQHandler:
   mov r5, 10
   udiv r4, r4, r5
 
-  @ clear event for button A
-  ldr r0, =GPIOTE_EVENTS_IN0
-  ldr r1, =0
-  str r1, [r0]
-
-  ldr r0, =0x100
   push {lr}
-  bl delay
+  bl clearAevent
   pop {lr}
 
-  @ clear event for button B
-  ldr r0, =GPIOTE_EVENTS_IN1
-  ldr r1, =0
-  str r1, [r0]
-  
-  ldr r0, =0x100
   push {lr}
-  bl delay
+  bl clearBevent
   pop {lr}
 
   nop
@@ -125,23 +128,13 @@ SysTick_Handler:
   nop
   @ clear GPIOTE and NVIC pending interrupt
   @ clear event for button A
-  ldr r0, =GPIOTE_EVENTS_IN0
-  ldr r1, =0
-  str r1, [r0]
-
-  ldr r0, =0x10
   push {lr}
-  bl delay
+  bl clearAevent
   pop {lr}
 
   @ clear event for button B
-  ldr r0, =GPIOTE_EVENTS_IN1
-  ldr r1, =0
-  str r1, [r0]
-
-  ldr r0, =0x10
   push {lr}
-  bl delay
+  bl clearBevent
   pop {lr}
 
   @ NVIC_ICPR0: B3.4.7 in ARMv7-M Reference Manual
@@ -171,6 +164,75 @@ SysTick_Handler:
 
   bx lr
 .size SysTick_Handler, .-SysTick_Handler
+
+
+.global firstA
+.type firstA, %function
+firstA:
+  nop
+  add r6, 1
+  sub r7, 1
+
+  push {lr}
+  bl clearBevent
+  pop {lr}
+
+  @ NVIC_ICPR0: B3.4.7 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_ICPR0
+  ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
+  str r1, [r0]
+
+  bx lr
+.size firstA, .-firstA
+
+.global firstB
+.type firstB, %function
+firstB:
+  nop
+  add r7, 1
+  sub r6, 1
+
+  push {lr}
+  bl clearAevent
+  pop {lr}
+
+  @ NVIC_ICPR0: B3.4.7 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_ICPR0
+  ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
+  str r1, [r0]
+
+  bx lr
+.size firstB, .-firstB
+
+.global clearAevent
+.type clearAevent, %function
+clearAevent:
+  @ clear event for button A
+  ldr r0, =GPIOTE_EVENTS_IN0
+  ldr r1, =0
+  str r1, [r0]
+
+  ldr r0, =0x100
+  push {lr}
+  bl delay
+  pop {lr}
+  bx lr
+.size clearAevent, .-clearAevent
+
+.global clearBevent
+.type clearBevent, %function
+clearBevent:
+  @ clear event for button B
+  ldr r0, =GPIOTE_EVENTS_IN1
+  ldr r1, =0
+  str r1, [r0]
+
+  ldr r0, =0x100
+  push {lr}
+  bl delay
+  pop {lr}
+  bx lr
+.size clearBevent, .-clearBevent
 
 .type led_center_blink, %function
 led_center_blink:
