@@ -94,6 +94,11 @@ GPIOTE_IRQHandler:
   ldr r0, =GPIOTE_EVENTS_IN0
   ldr r1, =0
   str r1, [r0]
+
+  ldr r0, =0x10
+  push {lr}
+  bl delay
+  pop {lr}
   nop
   bx lr
 .size GPIOTE_IRQHandler, .-GPIOTE_IRQHandler
@@ -228,12 +233,6 @@ led_blink:
   push {lr}
   bl led_on
   pop {lr}
-
-  @ @ for debugging
-  @ push {r0, lr}
-  @ ldr r0, =FIFTY_MILLISECONDS
-  @ bl delay
-  @ pop {r0, lr}
 
   push {lr}
   bl led_off
