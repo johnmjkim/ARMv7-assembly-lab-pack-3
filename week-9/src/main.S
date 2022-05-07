@@ -95,10 +95,21 @@ GPIOTE_IRQHandler:
   ldr r1, =0
   str r1, [r0]
 
-  ldr r0, =0x10
+  ldr r0, =0x100
   push {lr}
   bl delay
   pop {lr}
+
+  @ clear event for button B
+  ldr r0, =GPIOTE_EVENTS_IN1
+  ldr r1, =0
+  str r1, [r0]
+  
+  ldr r0, =0x100
+  push {lr}
+  bl delay
+  pop {lr}
+
   nop
   bx lr
 .size GPIOTE_IRQHandler, .-GPIOTE_IRQHandler
@@ -117,6 +128,21 @@ SysTick_Handler:
   ldr r0, =GPIOTE_EVENTS_IN0
   ldr r1, =0
   str r1, [r0]
+
+  ldr r0, =0x10
+  push {lr}
+  bl delay
+  pop {lr}
+
+  @ clear event for button B
+  ldr r0, =GPIOTE_EVENTS_IN1
+  ldr r1, =0
+  str r1, [r0]
+
+  ldr r0, =0x10
+  push {lr}
+  bl delay
+  pop {lr}
 
   @ NVIC_ICPR0: B3.4.7 in ARMv7-M Reference Manual
   ldr r0, =NVIC_ICPR0
@@ -300,10 +326,18 @@ setupGPIOTE:
   ldr r1, =(1 | 14 << 8 | 0 << 13 | 1 << 16)
   str r1, [r0]
 
-  @ 2: Enable Interrupt for GPIOTE[0] (id = 6)
+  @ 1: Configure GPIOTE_CONFIG[1]
+  @ Need to setup: mode, pin, port, polarity in the configuration register for GPIOTE[1]
+  @ Section 6.9.4.8 in nRF52833 reference manual
+  @ mode = 1 (event), pin = 23 and port = 0 (P0.23 = Button B), polarity = 1 (LoToHi)
+  ldr r0, =GPIOTE_CONFIG1
+  ldr r1, =(1 | 23 << 8 | 0 << 13 | 1 << 16)
+  str r1, [r0]
+
+  @ 2: Enable Interrupt for GPIOTE[0], GPIOTE[1] (id = 6)
   @ S6.9.4.6 in nRF52833 reference manual
   ldr r0, =GPIOTE_INTENSET
-  ldr r1, =0b1
+  ldr r1, =0b11
   str r1, [r0]
 
   @ 3: enable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ISER0
