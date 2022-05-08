@@ -113,6 +113,12 @@ GPIOTE_IRQHandler:
   bl clearBevent
   pop {lr}
 
+  @ 3: disable GPIOTE (interrupt #6 = NVIC_GPIOTE_ID) in NVIC_ICER0
+  @ NVIC_ICER0: B3.4.5 in ARMv7-M Reference Manual
+  ldr r0, =NVIC_ICER0
+  ldr r1, =(1 << 6) @ set the 6th bit since NVIC_GPIOTE_ID = 6
+  str r1, [r0]
+
   nop
   bx lr
 .size GPIOTE_IRQHandler, .-GPIOTE_IRQHandler
